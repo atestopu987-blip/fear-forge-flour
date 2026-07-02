@@ -1,0 +1,6 @@
+# Karanlık Anlatı
+
+> AI destekli, yüzsüz korku hikayesi video üretim hattı. Konu yaz, senaryo, ses ve görsel otomatik üretilsin.
+
+## Pages
+- [Ana sayfa](/): Uygulama tanıtımı ve nasıl çalıştığı.
