@@ -1,5 +1,9 @@
-// Client-only. Renders a scene sequence into a downloadable WebM via
-// canvas.captureStream() + WebAudio MediaStreamDestination + MediaRecorder.
+// Client-only. Cinematic scene sequence renderer:
+// - Ken-burns pan+zoom (alternating direction per scene)
+// - Crossfade between scenes
+// - Vignette + film-grain
+// - Word-by-word karaoke subtitles synced to scene duration
+// Uses canvas.captureStream + WebAudio MediaStreamDestination + MediaRecorder.
 
 export type RenderScene = {
   sira: number;
@@ -9,6 +13,8 @@ export type RenderScene = {
 };
 
 export type RenderFormat = "9:16" | "1:1" | "16:9";
+
+const CROSSFADE_MS = 500;
 
 function dims(format: RenderFormat): { w: number; h: number } {
   if (format === "9:16") return { w: 720, h: 1280 };
@@ -26,82 +32,174 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
-async function fetchAudioBuffer(
-  ctx: AudioContext,
-  url: string,
-): Promise<AudioBuffer> {
+async function fetchAudioBuffer(ctx: AudioContext, url: string): Promise<AudioBuffer> {
   const res = await fetch(url);
   const buf = await res.arrayBuffer();
   return await ctx.decodeAudioData(buf);
 }
 
-function drawCover(
+type KenBurns = {
+  z0: number;
+  z1: number;
+  ox0: number;
+  oy0: number;
+  ox1: number;
+  oy1: number;
+};
+
+function kenBurnsFor(i: number): KenBurns {
+  // Alternate: zoom-in from center, pan-right, zoom-out, pan-left
+  const patterns: KenBurns[] = [
+    { z0: 1.02, z1: 1.15, ox0: 0, oy0: 0, ox1: 0, oy1: 0 },
+    { z0: 1.1, z1: 1.1, ox0: -0.04, oy0: 0, ox1: 0.04, oy1: 0 },
+    { z0: 1.18, z1: 1.04, ox0: 0, oy0: 0.02, ox1: 0, oy1: -0.02 },
+    { z0: 1.08, z1: 1.16, ox0: 0.03, oy0: -0.02, ox1: -0.03, oy1: 0.02 },
+  ];
+  return patterns[i % patterns.length];
+}
+
+function drawScene(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
   W: number,
   H: number,
-  zoom: number,
+  t: number, // 0..1 progress within scene
+  kb: KenBurns,
+  alpha: number,
 ) {
+  const zoom = kb.z0 + (kb.z1 - kb.z0) * t;
+  const ox = (kb.ox0 + (kb.ox1 - kb.ox0) * t) * W;
+  const oy = (kb.oy0 + (kb.oy1 - kb.oy0) * t) * H;
   const scale = Math.max(W / img.width, H / img.height) * zoom;
   const dw = img.width * scale;
   const dh = img.height * scale;
-  const dx = (W - dw) / 2;
-  const dy = (H - dh) / 2;
+  const dx = (W - dw) / 2 + ox;
+  const dy = (H - dh) / 2 + oy;
+  ctx.globalAlpha = alpha;
   ctx.drawImage(img, dx, dy, dw, dh);
+  ctx.globalAlpha = 1;
 }
 
-function wrapText(
+function drawVignette(ctx: CanvasRenderingContext2D, W: number, H: number) {
+  const r = Math.hypot(W, H) / 2;
+  const g = ctx.createRadialGradient(W / 2, H / 2, r * 0.55, W / 2, H / 2, r);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.55)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawGrain(ctx: CanvasRenderingContext2D, W: number, H: number, frame: number) {
+  // Sparse random dots — cheap film grain
+  const count = Math.floor((W * H) / 4000);
+  ctx.fillStyle = "rgba(255,255,255,0.03)";
+  const seed = frame * 9973;
+  for (let i = 0; i < count; i++) {
+    const x = ((seed + i * 131) % W) | 0;
+    const y = ((seed * 7 + i * 251) % H) | 0;
+    ctx.fillRect(x, y, 1, 1);
+  }
+}
+
+function wrapLines(
   ctx: CanvasRenderingContext2D,
-  text: string,
+  words: string[],
   maxWidth: number,
-): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let line = "";
+): string[][] {
+  const lines: string[][] = [];
+  let cur: string[] = [];
   for (const w of words) {
-    const test = line ? `${line} ${w}` : w;
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = w;
+    const test = [...cur, w].join(" ");
+    if (ctx.measureText(test).width > maxWidth && cur.length) {
+      lines.push(cur);
+      cur = [w];
     } else {
-      line = test;
+      cur.push(w);
     }
   }
-  if (line) lines.push(line);
+  if (cur.length) lines.push(cur);
   return lines;
 }
 
-function drawSubtitle(
+function drawKaraokeCaption(
   ctx: CanvasRenderingContext2D,
   text: string,
   W: number,
   H: number,
+  t: number, // 0..1 within scene audio
 ) {
-  const fontSize = Math.round(W * 0.045);
-  ctx.font = `600 ${fontSize}px system-ui, -apple-system, Segoe UI, sans-serif`;
+  const fontSize = Math.round(W * 0.05);
+  ctx.font = `700 ${fontSize}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textAlign = "center";
-  const maxWidth = W * 0.88;
-  const lines = wrapText(ctx, text, maxWidth);
-  const lineH = fontSize * 1.25;
-  const blockH = lines.length * lineH;
-  const pad = fontSize * 0.9;
-  const bottom = H - Math.round(H * 0.06);
-  const top = bottom - blockH - pad;
+  ctx.textBaseline = "alphabetic";
 
-  // Dark gradient behind text
+  const words = text.trim().split(/\s+/);
+  const maxWidth = W * 0.86;
+  const lines = wrapLines(ctx, words, maxWidth);
+  const lineH = fontSize * 1.3;
+  const blockH = lines.length * lineH;
+  const pad = fontSize * 1.0;
+  const bottom = H - Math.round(H * 0.07);
+  const top = bottom - blockH - pad * 0.5;
+
+  // Bottom gradient plate
   const grad = ctx.createLinearGradient(0, top - pad, 0, H);
   grad.addColorStop(0, "rgba(0,0,0,0)");
-  grad.addColorStop(1, "rgba(0,0,0,0.85)");
+  grad.addColorStop(1, "rgba(0,0,0,0.9)");
   ctx.fillStyle = grad;
   ctx.fillRect(0, top - pad, W, H - (top - pad));
 
-  ctx.fillStyle = "#fff";
-  ctx.shadowColor = "rgba(0,0,0,0.9)";
-  ctx.shadowBlur = 8;
-  lines.forEach((ln, i) => {
-    ctx.fillText(ln, W / 2, bottom - blockH + (i + 1) * lineH - lineH * 0.25);
+  // Karaoke: reveal words based on t
+  const totalWords = words.length;
+  // Start slightly after t=0 and finish slightly before end for readability
+  const revealed = Math.min(
+    totalWords,
+    Math.max(0, Math.floor(((t - 0.05) / 0.85) * totalWords)),
+  );
+  const activeIdx = Math.min(totalWords - 1, revealed);
+
+  let wordIdx = 0;
+  lines.forEach((lineWords, li) => {
+    const y = top + (li + 1) * lineH - lineH * 0.3;
+    // Measure per-word offsets for coloring
+    const spaceW = ctx.measureText(" ").width;
+    const widths = lineWords.map((w) => ctx.measureText(w).width);
+    const totalW = widths.reduce((a, b) => a + b, 0) + spaceW * (lineWords.length - 1);
+    let x = (W - totalW) / 2;
+    for (let i = 0; i < lineWords.length; i++) {
+      const w = lineWords[i];
+      const globalIdx = wordIdx++;
+      const isActive = globalIdx === activeIdx;
+      const isPast = globalIdx < activeIdx;
+      const color = isActive
+        ? "hsl(var(--primary))"
+        : isPast
+          ? "#ffffff"
+          : "rgba(255,255,255,0.35)";
+      // Fallback: hsl var may not resolve on canvas; use accent hex
+      ctx.fillStyle = isActive ? "#ff3b3b" : color;
+      ctx.shadowColor = "rgba(0,0,0,0.95)";
+      ctx.shadowBlur = 10;
+      ctx.textAlign = "left";
+      ctx.fillText(w, x, y);
+      x += widths[i] + spaceW;
+    }
   });
   ctx.shadowBlur = 0;
+  ctx.textAlign = "center";
+}
+
+function drawProgressBar(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  p: number,
+) {
+  const h = Math.max(3, Math.round(H * 0.005));
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
+  ctx.fillRect(0, H - h, W, h);
+  ctx.fillStyle = "#ff3b3b";
+  ctx.fillRect(0, H - h, W * p, h);
 }
 
 function pickMime(): { mime: string; ext: string } {
@@ -138,10 +236,11 @@ export async function renderAndDownload(opts: {
   const dest = audioCtx.createMediaStreamDestination();
 
   const prepared = await Promise.all(
-    scenes.map(async (s) => ({
+    scenes.map(async (s, i) => ({
       scene: s,
       img: await loadImage(s.gorsel_url!),
       audio: await fetchAudioBuffer(audioCtx, s.ses_url!),
+      kb: kenBurnsFor(i),
     })),
   );
 
@@ -161,7 +260,7 @@ export async function renderAndDownload(opts: {
   const { mime, ext } = pickMime();
   const recorder = new MediaRecorder(combined, {
     mimeType: mime,
-    videoBitsPerSecond: 4_000_000,
+    videoBitsPerSecond: 5_000_000,
     audioBitsPerSecond: 128_000,
   });
   const chunks: BlobPart[] = [];
@@ -173,87 +272,99 @@ export async function renderAndDownload(opts: {
   });
   recorder.start(250);
 
-  // Render loop: draw first frame, then step through scenes
-  const start = performance.now();
-  let sceneStart = start;
-  let sceneIdx = 0;
-
-  // Prime the very first frame
-  const drawFrame = (idx: number, tSceneMs: number) => {
-    const p = prepared[idx];
-    const dur = p.audio.duration * 1000;
-    const t = Math.min(tSceneMs / Math.max(dur, 1), 1);
-    // Ken-burns zoom 1.02 -> 1.12
-    const zoom = 1.02 + 0.1 * t;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, W, H);
-    drawCover(ctx, p.img, W, H, zoom);
-    // Fade in first 300ms
-    if (tSceneMs < 300) {
-      ctx.fillStyle = `rgba(0,0,0,${1 - tSceneMs / 300})`;
-      ctx.fillRect(0, 0, W, H);
-    }
-    drawSubtitle(ctx, p.scene.anlatim, W, H);
-  };
-
-  // Schedule all audio up-front on the shared AudioContext timeline
-  let audioTime = audioCtx.currentTime + 0.15;
-  const audioStarts: number[] = [];
+  // Schedule audio on shared timeline
+  const startAt = audioCtx.currentTime + 0.2;
+  let cursor = startAt;
+  const sceneStarts: number[] = []; // in seconds since startAt
+  const sceneDurations: number[] = [];
   for (const p of prepared) {
     const src = audioCtx.createBufferSource();
     src.buffer = p.audio;
     src.connect(dest);
-    src.start(audioTime);
-    audioStarts.push(audioTime);
-    audioTime += p.audio.duration;
+    src.start(cursor);
+    sceneStarts.push(cursor - startAt);
+    sceneDurations.push(p.audio.duration);
+    cursor += p.audio.duration;
   }
-  const audioT0 = audioStarts[0];
+  const totalDur = cursor - startAt;
 
+  let frameNo = 0;
   await new Promise<void>((resolve) => {
     const tick = () => {
-      const nowCtx = audioCtx.currentTime;
-      const elapsedMs = Math.max(0, (nowCtx - audioT0) * 1000);
-      // Advance scene index based on cumulative audio durations
-      let cum = 0;
+      const now = audioCtx.currentTime;
+      const elapsed = Math.max(0, now - startAt);
+      const overall = Math.min(1, elapsed / totalDur);
+
+      // Find active scene
       let idx = 0;
       for (let i = 0; i < prepared.length; i++) {
-        const d = prepared[i].audio.duration * 1000;
-        if (elapsedMs < cum + d) {
-          idx = i;
-          break;
-        }
-        cum += d;
-        idx = i + 1;
+        if (elapsed >= sceneStarts[i]) idx = i;
+        else break;
       }
-      if (idx >= prepared.length) {
-        // Last frame of last scene
-        drawFrame(prepared.length - 1, prepared[prepared.length - 1].audio.duration * 1000);
+      const local = elapsed - sceneStarts[idx];
+      const dur = sceneDurations[idx];
+      const t = Math.min(1, local / dur);
+
+      // Background
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+
+      // Crossfade with next scene during last CROSSFADE_MS
+      const crossfadeS = CROSSFADE_MS / 1000;
+      const remaining = dur - local;
+      const hasNext = idx + 1 < prepared.length;
+      if (hasNext && remaining < crossfadeS) {
+        const mix = 1 - remaining / crossfadeS; // 0..1 into next
+        drawScene(ctx, prepared[idx].img, W, H, t, prepared[idx].kb, 1 - mix);
+        drawScene(ctx, prepared[idx + 1].img, W, H, 0, prepared[idx + 1].kb, mix);
+      } else {
+        drawScene(ctx, prepared[idx].img, W, H, t, prepared[idx].kb, 1);
+      }
+
+      // Fade-in first 400ms of whole video
+      if (elapsed < 0.4) {
+        ctx.fillStyle = `rgba(0,0,0,${1 - elapsed / 0.4})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      drawVignette(ctx, W, H);
+      drawGrain(ctx, W, H, frameNo);
+      drawKaraokeCaption(ctx, prepared[idx].scene.anlatim, W, H, t);
+      drawProgressBar(ctx, W, H, overall);
+
+      frameNo++;
+      opts.onProgress?.(`Sahne ${idx + 1}/${prepared.length} · %${Math.round(overall * 100)}`);
+
+      if (elapsed >= totalDur) {
         resolve();
         return;
       }
-      if (idx !== sceneIdx) {
-        sceneIdx = idx;
-        sceneStart = performance.now();
-        opts.onProgress?.(`Sahne ${idx + 1}/${prepared.length} çiziliyor…`);
-      }
-      drawFrame(idx, elapsedMs - cum);
-      // ignore sceneStart in favor of audio clock
-      void sceneStart;
       requestAnimationFrame(tick);
     };
-    opts.onProgress?.(`Sahne 1/${prepared.length} çiziliyor…`);
     requestAnimationFrame(tick);
   });
 
-  // Small tail so recorder captures final frame
-  await new Promise((r) => setTimeout(r, 400));
+  // Final fade-out tail
+  const tailStart = performance.now();
+  await new Promise<void>((resolve) => {
+    const tail = () => {
+      const e = (performance.now() - tailStart) / 600;
+      if (e >= 1) return resolve();
+      ctx.fillStyle = `rgba(0,0,0,${e})`;
+      ctx.fillRect(0, 0, W, H);
+      requestAnimationFrame(tail);
+    };
+    requestAnimationFrame(tail);
+  });
+
   recorder.stop();
   await done;
   await audioCtx.close().catch(() => {});
 
   const blob = new Blob(chunks, { type: mime });
   const url = URL.createObjectURL(blob);
-  const safe = opts.title.replace(/[^\p{L}\p{N}_-]+/gu, "_").slice(0, 60) || "video";
+  const safe =
+    opts.title.replace(/[^\p{L}\p{N}_-]+/gu, "_").slice(0, 60) || "video";
   const a = document.createElement("a");
   a.href = url;
   a.download = `${safe}.${ext}`;
