@@ -10,6 +10,7 @@ import {
   getProject,
   updateScene,
 } from "@/lib/projects.functions";
+import { renderAndDownload, type RenderFormat } from "@/lib/render-video";
 
 export const Route = createFileRoute("/_authenticated/projects/$id")({
   component: ProjectPage,
@@ -33,6 +34,7 @@ function ProjectPage() {
   const genImage = useServerFn(generateImage);
   const editScene = useServerFn(updateScene);
   const [busy, setBusy] = useState<string | null>(null);
+  const [renderMsg, setRenderMsg] = useState<string | null>(null);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["project", id],
@@ -90,17 +92,46 @@ function ProjectPage() {
                 : "Senaryo üret"}
           </button>
           {allImages && allVoices && (
-            <button
-              onClick={() =>
-                router.navigate({ to: "/projects/$id/preview", params: { id } })
-              }
-              className="rounded-md border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10"
-            >
-              ▶ Önizle
-            </button>
+            <>
+              <button
+                onClick={() =>
+                  router.navigate({ to: "/projects/$id/preview", params: { id } })
+                }
+                className="rounded-md border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+              >
+                ▶ Önizle
+              </button>
+              <button
+                disabled={renderMsg !== null}
+                onClick={async () => {
+                  try {
+                    setRenderMsg("Hazırlanıyor…");
+                    await renderAndDownload({
+                      scenes: scenes as unknown as Parameters<typeof renderAndDownload>[0]["scenes"],
+                      format: project.format as RenderFormat,
+                      title: project.baslik,
+                      onProgress: (m) => setRenderMsg(m),
+                    });
+                    toast.success("Video indirildi.");
+                  } catch (err) {
+                    toast.error((err as Error).message);
+                  } finally {
+                    setRenderMsg(null);
+                  }
+                }}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                {renderMsg ?? "⬇ Video indir"}
+              </button>
+            </>
           )}
         </div>
       </div>
+      {renderMsg && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Video tarayıcıda oluşturuluyor, sekmeyi açık tut. {renderMsg}
+        </p>
+      )}
 
       <div className="mt-8 space-y-4">
         {scenes.length === 0 && (
