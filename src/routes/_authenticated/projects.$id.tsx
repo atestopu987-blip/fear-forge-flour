@@ -89,6 +89,19 @@ function ProjectPage() {
     }
   }
 
+  useEffect(() => {
+    if (autoStartedRef.current) return;
+    if (!data) return;
+    if (typeof window === "undefined") return;
+    const key = `auto:${id}`;
+    if (sessionStorage.getItem(key) === "1") {
+      sessionStorage.removeItem(key);
+      autoStartedRef.current = true;
+      void runAll();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, id]);
+
   if (isLoading || !data) {
     return <div className="text-sm text-muted-foreground">Yükleniyor…</div>;
   }
