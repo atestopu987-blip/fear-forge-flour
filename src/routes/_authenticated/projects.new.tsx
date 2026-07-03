@@ -30,7 +30,10 @@ function NewProject() {
     setBusy(true);
     try {
       const res = await create({ data: form });
-      toast.success("Proje oluşturuldu.");
+      toast.success("Proje oluşturuldu. Otomatik üretim başlıyor…");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(`auto:${res.id}`, "1");
+      }
       navigate({ to: "/projects/$id", params: { id: res.id } });
     } catch (err) {
       toast.error((err as Error).message);
