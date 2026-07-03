@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   generateImage,
@@ -36,6 +36,7 @@ function ProjectPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [renderMsg, setRenderMsg] = useState<string | null>(null);
   const [autoMsg, setAutoMsg] = useState<string | null>(null);
+  const autoStartedRef = useRef(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["project", id],
