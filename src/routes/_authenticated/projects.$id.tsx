@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   generateImage,
@@ -35,6 +35,8 @@ function ProjectPage() {
   const editScene = useServerFn(updateScene);
   const [busy, setBusy] = useState<string | null>(null);
   const [renderMsg, setRenderMsg] = useState<string | null>(null);
+  const [autoMsg, setAutoMsg] = useState<string | null>(null);
+  const autoStartedRef = useRef(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["project", id],
@@ -52,6 +54,53 @@ function ProjectPage() {
       setBusy(null);
     }
   }
+
+  async function runAll() {
+    if (autoMsg) return;
+    try {
+      setAutoMsg("Senaryo yazılıyor…");
+      const scriptRes = await genScript({ data: { project_id: project.id } });
+      const fresh = await refetch();
+      const list = fresh.data?.scenes ?? [];
+      if (list.length === 0) throw new Error("Senaryo üretilemedi.");
+      const total = list.length;
+      let doneCount = 0;
+      setAutoMsg(`0/${total * 2} varlık hazır…`);
+      await Promise.all(
+        list.flatMap((s) => [
+          (async () => {
+            await genVoice({ data: { scene_id: s.id } });
+            doneCount++;
+            setAutoMsg(`${doneCount}/${total * 2} varlık hazır…`);
+          })(),
+          (async () => {
+            await genImage({ data: { scene_id: s.id } });
+            doneCount++;
+            setAutoMsg(`${doneCount}/${total * 2} varlık hazır…`);
+          })(),
+        ]),
+      );
+      await refetch();
+      toast.success(`Tamam. ${scriptRes.count} sahne hazır.`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setAutoMsg(null);
+    }
+  }
+
+  useEffect(() => {
+    if (autoStartedRef.current) return;
+    if (!data) return;
+    if (typeof window === "undefined") return;
+    const key = `auto:${id}`;
+    if (sessionStorage.getItem(key) === "1") {
+      sessionStorage.removeItem(key);
+      autoStartedRef.current = true;
+      void runAll();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, id]);
 
   if (isLoading || !data) {
     return <div className="text-sm text-muted-foreground">Yükleniyor…</div>;
@@ -76,6 +125,13 @@ function ProjectPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
+            disabled={autoMsg !== null || busy !== null}
+            onClick={runAll}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/30 hover:bg-primary/90 disabled:opacity-60"
+          >
+            {autoMsg ?? "🪄 Tek tıkla oluştur"}
+          </button>
+          <button
             disabled={busy !== null}
             onClick={() =>
               run("script", async () => {
@@ -83,7 +139,7 @@ function ProjectPage() {
                 toast.success("Senaryo hazır.");
               })
             }
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
           >
             {busy === "script"
               ? "Yazılıyor…"
