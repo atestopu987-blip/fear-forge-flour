@@ -11,6 +11,15 @@ import {
   updateScene,
 } from "@/lib/projects.functions";
 import { renderAndDownload, type RenderFormat } from "@/lib/render-video";
+import { generateDirectorGuide, type DirectorScene } from "@/lib/projects.functions";
+import {
+  buildDirectorGuideMarkdown,
+  downloadFullProjectZip,
+  downloadJson,
+  downloadText,
+  downloadUrl,
+  slug,
+} from "@/lib/downloads";
 
 export const Route = createFileRoute("/_authenticated/projects/$id")({
   component: ProjectPage,
@@ -36,6 +45,9 @@ function ProjectPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [renderMsg, setRenderMsg] = useState<string | null>(null);
   const [autoMsg, setAutoMsg] = useState<string | null>(null);
+  const [director, setDirector] = useState<DirectorScene[] | null>(null);
+  const [dlMsg, setDlMsg] = useState<string | null>(null);
+  const genDirector = useServerFn(generateDirectorGuide);
   const autoStartedRef = useRef(false);
 
   const { data, isLoading, refetch } = useQuery({
@@ -109,6 +121,7 @@ function ProjectPage() {
   const { project, scenes } = data;
   const allImages = scenes.length > 0 && scenes.every((s) => s.gorsel_url);
   const allVoices = scenes.length > 0 && scenes.every((s) => s.ses_url);
+  const projSlug = slug(project.baslik);
 
   return (
     <div>
@@ -189,6 +202,146 @@ function ProjectPage() {
         </p>
       )}
 
+      {scenes.length > 0 && (
+        <div className="mt-6 rounded-lg border border-border bg-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-serif text-lg">İndir & CapCut Rehberi</h2>
+              <p className="text-xs text-muted-foreground">
+                Her şeyi ayrı ayrı ya da tek ZIP olarak indir. Video servisi
+                yoksa CapCut yönetmen rehberini kullan.
+              </p>
+            </div>
+            {dlMsg && <span className="text-xs text-muted-foreground">{dlMsg}</span>}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+              onClick={() =>
+                downloadJson(
+                  `${projSlug}-senaryo.json`,
+                  scenes.map((s) => ({
+                    sira: s.sira,
+                    anlatim: s.anlatim,
+                    gorsel_prompt: s.gorsel_prompt,
+                  })),
+                )
+              }
+            >
+              ⬇ Senaryo (JSON)
+            </button>
+            <button
+              className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+              onClick={() =>
+                downloadText(
+                  `${projSlug}-senaryo.txt`,
+                  scenes
+                    .map((s) => `SAHNE ${s.sira}\n${s.anlatim}\n`)
+                    .join("\n"),
+                )
+              }
+            >
+              ⬇ Senaryo (TXT)
+            </button>
+            <button
+              className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+              onClick={() =>
+                downloadText(
+                  `${projSlug}-gorsel-promptlari.txt`,
+                  scenes.map((s) => `#${s.sira}\n${s.gorsel_prompt}\n`).join("\n"),
+                )
+              }
+            >
+              ⬇ Görsel Promptları
+            </button>
+            <button
+              disabled={busy === "director"}
+              className="rounded-md border border-primary px-3 py-1.5 text-xs text-primary hover:bg-primary/10 disabled:opacity-60"
+              onClick={() =>
+                run("director", async () => {
+                  const res = await genDirector({ data: { project_id: project.id } });
+                  setDirector(res.scenes);
+                  toast.success("CapCut rehberi hazır.");
+                })
+              }
+            >
+              {busy === "director"
+                ? "Rehber üretiliyor…"
+                : director
+                  ? "🎬 Rehberi yenile"
+                  : "🎬 CapCut Rehberi Üret"}
+            </button>
+            {director && (
+              <>
+                <button
+                  className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+                  onClick={() =>
+                    downloadText(
+                      `${projSlug}-capcut-rehberi.md`,
+                      buildDirectorGuideMarkdown(project, scenes, director),
+                      "text/markdown",
+                    )
+                  }
+                >
+                  ⬇ CapCut Rehberi (MD)
+                </button>
+                <button
+                  className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+                  onClick={() =>
+                    downloadJson(`${projSlug}-capcut-rehberi.json`, director)
+                  }
+                >
+                  ⬇ CapCut Rehberi (JSON)
+                </button>
+              </>
+            )}
+            <button
+              disabled={dlMsg !== null}
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              onClick={async () => {
+                try {
+                  setDlMsg("Paketleniyor…");
+                  await downloadFullProjectZip(project, scenes, director, (m) =>
+                    setDlMsg(m),
+                  );
+                  toast.success("Proje ZIP indirildi.");
+                } catch (err) {
+                  toast.error((err as Error).message);
+                } finally {
+                  setDlMsg(null);
+                }
+              }}
+            >
+              📦 Tüm Projeyi İndir (ZIP)
+            </button>
+          </div>
+          {director && (
+            <div className="mt-5 max-h-96 overflow-auto rounded-md border border-border bg-background/50 p-3">
+              {director.map((d) => (
+                <div key={d.sira} className="mb-3 text-xs">
+                  <div className="font-mono text-primary/80">
+                    SAHNE {d.sira} · {d.sure_sn}s · başlangıç {d.timeline_baslangic}
+                  </div>
+                  <div className="mt-1 grid gap-1 md:grid-cols-2">
+                    <div><b>Mekan:</b> {d.mekan}</div>
+                    <div><b>Kamera:</b> {d.kamera_acisi} — {d.kamera_hareketi}</div>
+                    <div><b>Duygu:</b> {d.duygu}</div>
+                    <div><b>Geçiş:</b> {d.gecis_efekti}</div>
+                    <div><b>Zoom:</b> {d.zoom}</div>
+                    <div><b>Renk:</b> {d.color_grading} · LUT: {d.lut}</div>
+                    <div><b>Efektler:</b> Blur {d.blur} · Shake {d.shake} · Grain {d.film_grain}</div>
+                    <div><b>Altyazı:</b> {d.altyazi_stili} — {d.yazi_animasyonu}</div>
+                    <div className="md:col-span-2"><b>Müzik:</b> {d.muzik_onerisi}</div>
+                    <div className="md:col-span-2"><b>Ses efektleri:</b> {(d.ses_efektleri ?? []).join(", ")}</div>
+                    <div className="md:col-span-2"><b>Video promptu:</b> {d.video_prompt}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mt-8 space-y-4">
         {scenes.length === 0 && (
           <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
@@ -217,6 +370,7 @@ function ProjectPage() {
               await refetch();
               toast.success("Sahne güncellendi.");
             }}
+            projSlug={projSlug}
           />
         ))}
       </div>
@@ -230,12 +384,14 @@ function SceneCard({
   onVoice,
   onImage,
   onSave,
+  projSlug,
 }: {
   scene: Scene;
   busy: string | null;
   onVoice: () => void;
   onImage: () => void;
   onSave: (patch: { anlatim?: string; gorsel_prompt?: string }) => Promise<void>;
+  projSlug: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [anlatim, setAnlatim] = useState(scene.anlatim);
@@ -318,6 +474,14 @@ function SceneCard({
           {voiceBusy ? "Ses üretiliyor…" : scene.ses_url ? "Sesi yenile" : "Ses üret"}
         </button>
         {scene.ses_url && <audio controls src={scene.ses_url} className="h-8 max-w-xs" />}
+        {scene.ses_url && (
+          <button
+            onClick={() => downloadUrl(scene.ses_url!, `${projSlug}-sahne-${scene.sira}.mp3`)}
+            className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
+          >
+            ⬇ MP3
+          </button>
+        )}
         <button
           onClick={onImage}
           disabled={imageBusy || busy !== null}
@@ -325,6 +489,14 @@ function SceneCard({
         >
           {imageBusy ? "Görsel üretiliyor…" : scene.gorsel_url ? "Görseli yenile" : "Görsel üret"}
         </button>
+        {scene.gorsel_url && (
+          <button
+            onClick={() => downloadUrl(scene.gorsel_url!, `${projSlug}-sahne-${scene.sira}.png`)}
+            className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
+          >
+            ⬇ PNG
+          </button>
+        )}
       </div>
     </div>
   );

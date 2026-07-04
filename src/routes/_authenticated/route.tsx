@@ -14,9 +14,10 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthedLayout() {
   const navigate = useNavigate();
   const { user } = Route.useRouteContext();
+  const isAnon = !user.email;
   async function signOut() {
     await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
+    navigate({ to: "/", replace: true });
   }
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -27,12 +28,14 @@ function AuthedLayout() {
             <span className="font-serif tracking-wide">Karanlık Anlatı</span>
           </Link>
           <div className="flex items-center gap-4 text-sm">
-            <span className="hidden text-muted-foreground md:inline">{user.email}</span>
+            <span className="hidden text-muted-foreground md:inline">
+              {isAnon ? "Misafir stüdyo" : user.email}
+            </span>
             <button
               onClick={signOut}
               className="rounded-md border border-border px-3 py-1.5 hover:bg-muted"
             >
-              Çıkış
+              {isAnon ? "Sıfırla" : "Çıkış"}
             </button>
           </div>
         </div>

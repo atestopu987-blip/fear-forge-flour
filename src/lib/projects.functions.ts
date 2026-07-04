@@ -228,3 +228,121 @@ export const generateImage = createServerFn({ method: "POST" })
     if (ue) throw new Error(ue.message);
     return { url };
   });
+
+export const deleteProject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    await context.supabase.from("scenes").delete().eq("project_id", data.id);
+    const { error } = await context.supabase.from("projects").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const duplicateProject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: src, error } = await context.supabase
+      .from("projects")
+      .select("*")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error || !src) throw new Error("Proje bulunamadı");
+    const { data: copy, error: ce } = await context.supabase
+      .from("projects")
+      .insert({
+        user_id: context.userId,
+        baslik: `${src.baslik} (kopya)`,
+        konu: src.konu,
+        ton: src.ton,
+        hedef_sure: src.hedef_sure,
+        gorsel_stili: src.gorsel_stili,
+        format: src.format,
+        dil: src.dil,
+        durum: "taslak",
+      })
+      .select("id")
+      .single();
+    if (ce || !copy) throw new Error(ce?.message ?? "Kopyalanamadı");
+    return { id: copy.id as string };
+  });
+
+export type DirectorScene = {
+  sira: number;
+  sure_sn: number;
+  timeline_baslangic: string;
+  mekan: string;
+  atmosfer: string;
+  kamera_acisi: string;
+  kamera_hareketi: string;
+  karakter_hareketi: string;
+  duygu: string;
+  ses_efektleri: string[];
+  muzik_onerisi: string;
+  anlatici_metni: string;
+  diyalog: string;
+  gorsel_prompt: string;
+  video_prompt: string;
+  gecis_efekti: string;
+  zoom: string;
+  blur: string;
+  motion_blur: string;
+  shake: string;
+  glow: string;
+  color_grading: string;
+  lut: string;
+  film_grain: string;
+  vignette: string;
+  altyazi_stili: string;
+  yazi_animasyonu: string;
+  fade_sn: string;
+};
+
+export const generateDirectorGuide = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ project_id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { chatJson } = await import("./lovable-ai.server");
+    const { data: project, error } = await context.supabase
+      .from("projects")
+      .select("*")
+      .eq("id", data.project_id)
+      .maybeSingle();
+    if (error || !project) throw new Error("Proje bulunamadı");
+    const { data: scenes } = await context.supabase
+      .from("scenes")
+      .select("*")
+      .eq("project_id", data.project_id)
+      .order("sira", { ascending: true });
+    if (!scenes || scenes.length === 0) throw new Error("Önce senaryo üret.");
+
+    const perScene = Math.max(4, Math.round(project.hedef_sure / scenes.length));
+    const tonLabel = TON_LABEL[project.ton] ?? project.ton;
+    const stilLabel = STIL_LABEL[project.gorsel_stili] ?? project.gorsel_stili;
+
+    const system = `Sen profesyonel bir video yönetmenisin ve CapCut editörüsün. Her sahne için detaylı, uygulanabilir montaj talimatları verirsin. Cevabın SADECE geçerli JSON olacak.`;
+    const user = `Proje: "${project.baslik}" — ${project.konu}
+Ton: ${tonLabel}. Görsel stili: ${stilLabel}. Format: ${project.format}. Toplam süre: ${project.hedef_sure}s.
+Her sahne yaklaşık ${perScene}s. ${scenes.length} sahne var.
+
+Sahneler:
+${scenes.map((s) => `#${s.sira}: ${s.anlatim}`).join("\n")}
+
+Her sahne için TÜRKÇE, kısa ve pratik CapCut talimatları üret. SADECE şu JSON:
+{"sahneler":[{
+"sira":1,"sure_sn":${perScene},"timeline_baslangic":"0:00",
+"mekan":"...","atmosfer":"...","kamera_acisi":"low angle | close-up | wide vs.",
+"kamera_hareketi":"dolly in | pan left vs.","karakter_hareketi":"...","duygu":"...",
+"ses_efektleri":["rüzgar","gıcırtı"],"muzik_onerisi":"karanlık ambient, 60 BPM",
+"anlatici_metni":"...","diyalog":"...","gorsel_prompt":"...","video_prompt":"...",
+"gecis_efekti":"cross dissolve | glitch | whip pan","zoom":"1.0 → 1.15 yavaş",
+"blur":"hafif gaussian 2px","motion_blur":"orta","shake":"düşük",
+"glow":"gözlerde soft glow","color_grading":"teal-orange, gölgeler +","lut":"Cinematic Horror",
+"film_grain":"orta","vignette":"koyu","altyazi_stili":"beyaz, kalın, gölge",
+"yazi_animasyonu":"typewriter","fade_sn":"in 0.3 / out 0.3"
+}]}`;
+
+    const out = await chatJson<{ sahneler: DirectorScene[] }>(system, user);
+    return { scenes: out.sahneler ?? [] };
+  });
