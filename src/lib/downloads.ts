@@ -1,5 +1,6 @@
 // Client-side download helpers. Builds JSON/TXT/ZIP artifacts from project data.
 import JSZip from "jszip";
+import { jsPDF } from "jspdf";
 import type { DirectorScene } from "./projects.functions";
 
 export type ProjectRow = {
@@ -56,6 +57,41 @@ export async function downloadUrl(url: string, name: string) {
   const res = await fetch(url);
   const blob = await res.blob();
   saveBlob(blob, name);
+}
+
+export function downloadDirectorGuidePdf(
+  project: ProjectRow,
+  scenes: SceneRow[],
+  director: DirectorScene[] | null,
+  filename: string,
+) {
+  const md = buildDirectorGuideMarkdown(project, scenes, director);
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const marginX = 40;
+  const marginY = 50;
+  const maxWidth = 515;
+  const lineH = 14;
+  const pageH = doc.internal.pageSize.getHeight();
+  let y = marginY;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  for (const raw of md.split("\n")) {
+    let line = raw;
+    let size = 11;
+    let style: "normal" | "bold" = "normal";
+    if (line.startsWith("### ")) { line = line.slice(4); size = 12; style = "bold"; }
+    else if (line.startsWith("## ")) { line = line.slice(3); size = 14; style = "bold"; }
+    else if (line.startsWith("# ")) { line = line.slice(2); size = 18; style = "bold"; }
+    doc.setFont("helvetica", style);
+    doc.setFontSize(size);
+    const wrapped = doc.splitTextToSize(line || " ", maxWidth);
+    for (const w of wrapped) {
+      if (y > pageH - marginY) { doc.addPage(); y = marginY; }
+      doc.text(w, marginX, y);
+      y += lineH;
+    }
+  }
+  doc.save(filename);
 }
 
 function fmtTime(sec: number): string {
