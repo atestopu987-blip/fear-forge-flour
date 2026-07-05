@@ -14,6 +14,7 @@ import { renderAndDownload, type RenderFormat } from "@/lib/render-video";
 import { generateDirectorGuide, type DirectorScene } from "@/lib/projects.functions";
 import {
   buildDirectorGuideMarkdown,
+  downloadDirectorGuidePdf,
   downloadFullProjectZip,
   downloadJson,
   downloadText,
@@ -292,6 +293,19 @@ function ProjectPage() {
                   }
                 >
                   ⬇ CapCut Rehberi (JSON)
+                </button>
+                <button
+                  className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+                  onClick={() =>
+                    downloadDirectorGuidePdf(
+                      project,
+                      scenes,
+                      director,
+                      `${projSlug}-capcut-rehberi.pdf`,
+                    )
+                  }
+                >
+                  ⬇ CapCut Rehberi (PDF)
                 </button>
               </>
             )}
