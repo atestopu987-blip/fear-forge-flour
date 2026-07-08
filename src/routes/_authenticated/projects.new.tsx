@@ -60,25 +60,45 @@ function NewProject() {
       </p>
 
       <form onSubmit={submit} className="mt-8 space-y-5">
+        <label className="flex items-start gap-3 rounded-md border border-input bg-input/40 p-3 cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={atasozuMode}
+            onChange={(e) => setAtasozuMode(e.target.checked)}
+          />
+          <span className="text-sm">
+            <span className="font-medium">Atasözü modu</span>
+            <span className="block text-muted-foreground">
+              Konu alanına bir atasözü yaz; AI, atasözünün kökenini 4-5 sahnede hikayeleştirsin ve
+              uygun görseller üretsin.
+            </span>
+          </span>
+        </label>
+
         <div>
           <label className="mb-1 block text-sm">Başlık</label>
           <input
             required
             maxLength={100}
             className={field}
-            placeholder="Orman"
+            placeholder={atasozuMode ? "Atasözünün başlığı (ör. Damlaya damlaya göl olur)" : "Orman"}
             value={form.baslik}
             onChange={(e) => setForm({ ...form, baslik: e.target.value })}
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm">Konu</label>
+          <label className="mb-1 block text-sm">{atasozuMode ? "Atasözü" : "Konu"}</label>
           <textarea
             required
             rows={3}
             maxLength={500}
             className={field}
-            placeholder="Kamp yapmak için ormana giren üç arkadaşın başına gelenler…"
+            placeholder={
+              atasozuMode
+                ? "Örn: Damlaya damlaya göl olur"
+                : "Kamp yapmak için ormana giren üç arkadaşın başına gelenler…"
+            }
             value={form.konu}
             onChange={(e) => setForm({ ...form, konu: e.target.value })}
           />
