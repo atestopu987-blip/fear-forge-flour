@@ -12,6 +12,7 @@ function NewProject() {
   const navigate = useNavigate();
   const create = useServerFn(createProject);
   const [busy, setBusy] = useState(false);
+  const [atasozuMode, setAtasozuMode] = useState(false);
   const [form, setForm] = useState({
     baslik: "",
     konu: "",
@@ -29,7 +30,10 @@ function NewProject() {
     e.preventDefault();
     setBusy(true);
     try {
-      const res = await create({ data: form });
+      const payload = atasozuMode
+        ? { ...form, konu: `[ATASÖZÜ] ${form.konu}` }
+        : form;
+      const res = await create({ data: payload });
       toast.success("Proje oluşturuldu. Otomatik üretim başlıyor…");
       if (typeof window !== "undefined") {
         sessionStorage.setItem(`auto:${res.id}`, "1");
