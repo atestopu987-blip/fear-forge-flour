@@ -93,8 +93,27 @@ export const generateScript = createServerFn({ method: "POST" })
     const tonLabel = TON_LABEL[project.ton] ?? project.ton;
     const stilLabel = STIL_LABEL[project.gorsel_stili] ?? project.gorsel_stili;
 
-    const system = `Sen profesyonel bir korku hikayesi senaristisin. Kısa, etkili, atmosferik ve Türkçe hikayeler yazarsın. Cevabın SADECE geçerli JSON olacak; başka açıklama yazmayacaksın.`;
-    const user = `Konu: "${project.konu}"
+    const isAtasozu = project.konu.trim().startsWith("[ATASÖZÜ]");
+    const atasozuText = isAtasozu ? project.konu.replace(/^\[ATASÖZÜ\]\s*/i, "").trim() : "";
+
+    const system = isAtasozu
+      ? `Sen deneyimli bir Türk halk kültürü anlatıcısı ve senaristsin. Verilen atasözünün olası kökenini 4-5 sahnelik kısa, etkileyici bir hikaye şeklinde anlatırsın. Sonda atasözünün nasıl doğduğu net biçimde anlaşılmalı. Cevabın SADECE geçerli JSON olacak.`
+      : `Sen profesyonel bir korku hikayesi senaristisin. Kısa, etkili, atmosferik ve Türkçe hikayeler yazarsın. Cevabın SADECE geçerli JSON olacak; başka açıklama yazmayacaksın.`;
+
+    const user = isAtasozu
+      ? `Atasözü: "${atasozuText}"
+Başlık: "${project.baslik}"
+Hedef süre: ${project.hedef_sure} sn (yaklaşık ${wordCount} kelime).
+Bu atasözünün nasıl ortaya çıktığını anlatan TAM 4 veya 5 sahnelik bir köken hikayesi kur. Karakter, mekan, olay örgüsü, doruk ve sonda atasözünün doğduğu an olsun. Görsel stili: ${stilLabel} (atmosferi hikayeye uygun ayarla; atasözü hikayesi mutlaka korku olmayabilir).
+Her sahne için:
+- "sira": 1'den başlayan tam sayı
+- "anlatim": TÜRKÇE anlatıcı metni (2-4 cümle, akıcı ve dramatik). Son sahnenin sonunda atasözünün kendisi geçsin.
+- "gorsel_prompt": İngilizce detaylı image prompt; ${stilLabel}, sahnenin ruhuna uygun.
+- "ses_efekti": (opsiyonel) kısa Türkçe etiket.
+
+SADECE şu JSON:
+{"sahneler":[{"sira":1,"anlatim":"...","gorsel_prompt":"...","ses_efekti":"..."}]}`
+      : `Konu: "${project.konu}"
 Başlık: "${project.baslik}"
 Ton: ${tonLabel}
 Hedef süre: ${project.hedef_sure} saniye (yaklaşık ${wordCount} kelime, 150 kelime/dakika).
