@@ -161,7 +161,7 @@ function ProjectPage() {
                 ? "Senaryoyu yeniden yaz"
                 : "Senaryo üret"}
           </button>
-          {allImages && allVoices && (
+          {scenes.length > 0 && (
             <>
               <button
                 onClick={() =>
@@ -169,7 +169,7 @@ function ProjectPage() {
                 }
                 className="rounded-md border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10"
               >
-                ▶ Önizle
+                ▶ Önizle{allImages && allVoices ? "" : " (kısmi)"}
               </button>
               <button
                 disabled={renderMsg !== null}
