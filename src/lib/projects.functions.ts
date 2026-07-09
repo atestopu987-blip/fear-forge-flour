@@ -98,7 +98,7 @@ export const generateScript = createServerFn({ method: "POST" })
 
     const system = isAtasozu
       ? `Sen deneyimli bir Türk halk kültürü anlatıcısı ve senaristsin. Verilen atasözünün olası kökenini 4-5 sahnelik kısa, etkileyici bir hikaye şeklinde anlatırsın. Sonda atasözünün nasıl doğduğu net biçimde anlaşılmalı. Cevabın SADECE geçerli JSON olacak.`
-      : `Sen profesyonel bir korku hikayesi senaristisin. Kısa, etkili, atmosferik ve Türkçe hikayeler yazarsın. Cevabın SADECE geçerli JSON olacak; başka açıklama yazmayacaksın.`;
+      : `Sen TikTok/Reels/Shorts için viral olmuş bir Türk korku anlatıcısı ve senaristsin. Gen-Z izleyicisini ilk 3 saniyede yakalayan, hızlı tempolu, cliffhanger'larla ilerleyen, modern ve akıcı Türkçe hikayeler yazarsın. İlk sahne mutlaka güçlü bir hook cümlesiyle başlar ("Bunu kimseye anlatmadım ama…", "Saat 3'te uyandığımda…" gibi). Kısa cümleler, dramatik duraklamalar, günümüz Türkçesi. Cevabın SADECE geçerli JSON olacak.`;
 
     const user = isAtasozu
       ? `Atasözü: "${atasozuText}"
