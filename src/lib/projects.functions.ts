@@ -59,7 +59,7 @@ const TON_LABEL: Record<string, string> = {
   gerilim: "atmosferik gerilim",
   psikolojik: "psikolojik korku",
   sehir_efsanesi: "şehir efsanesi",
-  gore: "gore/kanlı",
+  gore: "karanlık ve yoğun gerilim",
   cocuk_korkusu: "çocukluk korkusu",
 };
 
@@ -98,7 +98,7 @@ export const generateScript = createServerFn({ method: "POST" })
 
     const system = isAtasozu
       ? `Sen deneyimli bir Türk halk kültürü anlatıcısı ve senaristsin. Verilen atasözünün olası kökenini 4-5 sahnelik kısa, etkileyici bir hikaye şeklinde anlatırsın. Sonda atasözünün nasıl doğduğu net biçimde anlaşılmalı. Cevabın SADECE geçerli JSON olacak.`
-      : `Sen TikTok/Reels/Shorts için viral olmuş bir Türk korku anlatıcısı ve senaristsin. Gen-Z izleyicisini ilk 3 saniyede yakalayan, hızlı tempolu, cliffhanger'larla ilerleyen, modern ve akıcı Türkçe hikayeler yazarsın. İlk sahne mutlaka güçlü bir hook cümlesiyle başlar ("Bunu kimseye anlatmadım ama…", "Saat 3'te uyandığımda…" gibi). Kısa cümleler, dramatik duraklamalar, günümüz Türkçesi. Cevabın SADECE geçerli JSON olacak.`;
+      : `Sen TikTok/Reels/Shorts için viral olmuş bir Türk gerilim ve gizem anlatıcısı ve senaristsin. Gen-Z izleyicisini ilk 3 saniyede yakalayan, hızlı tempolu, cliffhanger'larla ilerleyen, modern ve akıcı Türkçe hikayeler yazarsın. Kan, yara, silah, intihar, kendine zarar verme veya grafik şiddet yazmazsın; korkuyu atmosfer, gölge, ses, bilinmezlik ve psikolojik gerilimle kurarsın. İlk sahne mutlaka güçlü bir hook cümlesiyle başlar ("Bunu kimseye anlatmadım ama…", "Saat 3'te uyandığımda…" gibi). Kısa cümleler, dramatik duraklamalar, günümüz Türkçesi. Cevabın SADECE geçerli JSON olacak.`;
 
     const user = isAtasozu
       ? `Atasözü: "${atasozuText}"
@@ -120,7 +120,7 @@ Hedef süre: ${project.hedef_sure} saniye (yaklaşık ${wordCount} kelime, 150 k
 Hikayeyi 6-10 sahneye böl. Her sahne için:
 - "sira": 1'den başlayan tam sayı
 - "anlatim": O sahnede seslendirilecek TÜRKÇE metin (2-4 cümle, dramatik)
-- "gorsel_prompt": Sahneyi görselleştirecek İngilizce, detaylı image prompt; ${stilLabel} tarzında, karanlık, atmosferik.
+- "gorsel_prompt": Sahneyi görselleştirecek İngilizce, detaylı image prompt; ${stilLabel} tarzında, atmosferik, sinematik, grafik olmayan. Kan, yara, silah, intihar, kendine zarar verme, ceset ve açık şiddet kelimelerini kullanma; sis, gölge, ışık, boş mekan, semboller ve mimari detaylarla gerilim kur.
 - "ses_efekti": (opsiyonel) kısa Türkçe etiket, örn: "rüzgar", "kapı gıcırtısı"
 
 SADECE şu JSON formatını döndür:
@@ -232,7 +232,7 @@ export const generateImage = createServerFn({ method: "POST" })
       .eq("id", scene.project_id)
       .maybeSingle();
     const styleSuffix = project ? STIL_LABEL[project.gorsel_stili] ?? "" : "";
-    const prompt = `${scene.gorsel_prompt}. Style: ${styleSuffix}. Dark, atmospheric, horror mood.`;
+    const prompt = `${scene.gorsel_prompt}. Style: ${styleSuffix}. Atmospheric mystery mood, cinematic lighting, fog, shadows, symbolic tension, no graphic violence.`;
     const bytes = await generateImagePng(prompt);
     const url = await uploadAsset(
       { supabase: context.supabase, userId: context.userId },
