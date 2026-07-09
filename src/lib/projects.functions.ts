@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { notFound } from "@tanstack/react-router";
 import { z } from "zod";
 
 const NewProjectSchema = z.object({
@@ -45,7 +46,7 @@ export const getProject = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!project) throw new Error("Proje bulunamadı");
+    if (!project) throw notFound();
     const { data: scenes, error: se } = await context.supabase
       .from("scenes")
       .select("*")
