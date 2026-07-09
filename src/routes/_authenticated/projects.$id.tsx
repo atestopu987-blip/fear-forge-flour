@@ -24,6 +24,40 @@ import {
 
 export const Route = createFileRoute("/_authenticated/projects/$id")({
   component: ProjectPage,
+  errorComponent: ({ error, reset }) => {
+    const router = useRouter();
+    return (
+      <div className="rounded-lg border border-border bg-card p-6 text-sm">
+        <p className="font-serif text-lg">Bir şeyler ters gitti</p>
+        <p className="mt-2 text-muted-foreground">{error.message}</p>
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={() => { router.invalidate(); reset(); }}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
+          >
+            Tekrar dene
+          </button>
+          <Link to="/dashboard" className="rounded-md border border-border px-3 py-1.5 text-xs">
+            Panele dön
+          </Link>
+        </div>
+      </div>
+    );
+  },
+  notFoundComponent: () => (
+    <div className="rounded-lg border border-border bg-card p-6 text-sm">
+      <p className="font-serif text-lg">Proje bulunamadı</p>
+      <p className="mt-2 text-muted-foreground">
+        Bu proje silinmiş ya da başka bir hesaba ait olabilir.
+      </p>
+      <Link
+        to="/dashboard"
+        className="mt-4 inline-block rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
+      >
+        Panele dön
+      </Link>
+    </div>
+  ),
 });
 
 type Scene = {
