@@ -37,7 +37,7 @@ function PreviewPage() {
     return () => a.removeEventListener("ended", onEnd);
   }, [playing, index, current, scenes.length]);
 
-  if (!data || !current)
+  if (!data || !data.project || !current)
     return <div className="text-sm text-muted-foreground">Yükleniyor…</div>;
 
   const aspect =
