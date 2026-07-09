@@ -355,10 +355,10 @@ export async function renderAndDownload(opts: {
       const hasNext = idx + 1 < prepared.length;
       if (hasNext && remaining < crossfadeS) {
         const mix = 1 - remaining / crossfadeS; // 0..1 into next
-        drawScene(ctx, prepared[idx].img, W, H, t, prepared[idx].kb, 1 - mix);
-        drawScene(ctx, prepared[idx + 1].img, W, H, 0, prepared[idx + 1].kb, mix);
+        drawScene(ctx, prepared[idx].img, W, H, t, prepared[idx].kb, 1 - mix, frameNo);
+        drawScene(ctx, prepared[idx + 1].img, W, H, 0, prepared[idx + 1].kb, mix, frameNo);
       } else {
-        drawScene(ctx, prepared[idx].img, W, H, t, prepared[idx].kb, 1);
+        drawScene(ctx, prepared[idx].img, W, H, t, prepared[idx].kb, 1, frameNo);
       }
 
       // Fade-in first 400ms of whole video
@@ -367,6 +367,8 @@ export async function renderAndDownload(opts: {
         ctx.fillRect(0, 0, W, H);
       }
 
+      drawColorGrade(ctx, W, H);
+      drawLightLeak(ctx, W, H, frameNo);
       drawVignette(ctx, W, H);
       drawGrain(ctx, W, H, frameNo);
       drawKaraokeCaption(ctx, prepared[idx].scene.anlatim, W, H, t);
