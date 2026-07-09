@@ -204,13 +204,16 @@ function drawProgressBar(
 
 function pickMime(): { mime: string; ext: string } {
   const candidates = [
+    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+    "video/mp4;codecs=h264,aac",
+    "video/mp4",
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",
     "video/webm",
   ];
   for (const m of candidates) {
     if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) {
-      return { mime: m, ext: "webm" };
+      return { mime: m, ext: m.includes("mp4") ? "mp4" : "webm" };
     }
   }
   return { mime: "video/webm", ext: "webm" };
