@@ -227,7 +227,12 @@ export const generateVoice = createServerFn({ method: "POST" })
       .eq("id", data.scene_id)
       .maybeSingle();
     if (error || !scene) throw new Error("Sahne bulunamadı");
-    const bytes = await textToSpeechMp3(scene.anlatim);
+    const { data: proj } = await context.supabase
+      .from("projects")
+      .select("ton")
+      .eq("id", scene.project_id)
+      .maybeSingle();
+    const bytes = await textToSpeechMp3(scene.anlatim, { mood: proj?.ton ?? "gerilim" });
     const url = await uploadAsset(
       { supabase: context.supabase, userId: context.userId },
       `${scene.project_id}/scene-${scene.sira}-${Date.now()}.mp3`,
