@@ -365,14 +365,51 @@ export async function renderAndDownload(opts: {
   await audioCtx.close().catch(() => {});
 
   const blob = new Blob(chunks, { type: mime });
-  const url = URL.createObjectURL(blob);
   const safe =
     opts.title.replace(/[^\p{L}\p{N}_-]+/gu, "_").slice(0, 60) || "video";
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${safe}.${ext}`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 5_000);
+  const filename = `${safe}.${ext}`;
+  await saveVideoBlob(blob, filename, mime);
+}
+
+async function saveVideoBlob(blob: Blob, filename: string, mime: string) {
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !("MSStream" in window);
+  const isMobile = isIOS || /Android/i.test(ua);
+
+  // 1) Try Web Share API with file (best UX on iOS/Android — user can save to Files/Photos)
+  try {
+    const file = new File([blob], filename, { type: mime });
+    const navAny = navigator as Navigator & {
+      canShare?: (data: { files?: File[] }) => boolean;
+      share?: (data: { files?: File[]; title?: string }) => Promise<void>;
+    };
+    if (isMobile && navAny.canShare && navAny.share && navAny.canShare({ files: [file] })) {
+      await navAny.share({ files: [file], title: filename });
+      return;
+    }
+  } catch {
+    // fall through
+  }
+
+  // 2) Standard blob download
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    // 3) iOS Safari fallback: navigate to blob so the user can long-press → Save
+    if (isIOS) {
+      setTimeout(() => {
+        window.location.href = url;
+      }, 200);
+    }
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 15_000);
+  }
 }
