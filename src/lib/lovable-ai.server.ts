@@ -68,28 +68,44 @@ export async function textToSpeechMp3(input: string, voice = "onyx"): Promise<Ui
 }
 
 export async function generateImagePng(prompt: string): Promise<Uint8Array> {
-  const res = await fetch(`${BASE}/images/generations`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "openai/gpt-image-2",
-      prompt,
-      quality: "low",
-    }),
+  // Gemini image models have a much more permissive policy for horror/mystery
+  // visual content than OpenAI, which rejects atmospheric horror prompts as
+  // self-harm/violence. Also soften the wording to focus on mood, not gore.
+  const softened =
+    `Cinematic atmospheric illustration, moody and mysterious. ${prompt} ` +
+    `No blood, no gore, no injuries, no weapons, no distressing content — ` +
+    `focus on shadows, fog, lighting, and mood.`;
+
+  const tryModel = async (model: string, body: Record<string, unknown>) => {
+    const res = await fetch(`${BASE}/images/generations`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model, ...body }),
+    });
+    if (!res.ok) return { ok: false as const, status: res.status, text: await res.text().catch(() => "") };
+    const data = (await res.json()) as { data?: Array<{ b64_json?: string; url?: string }> };
+    const first = data.data?.[0];
+    if (first?.b64_json) return { ok: true as const, bytes: new Uint8Array(Buffer.from(first.b64_json, "base64")) };
+    if (first?.url) {
+      const r = await fetch(first.url);
+      return { ok: true as const, bytes: new Uint8Array(await r.arrayBuffer()) };
+    }
+    return { ok: false as const, status: 500, text: "empty response" };
+  };
+
+  // Primary: Gemini (permissive for atmospheric horror).
+  let r = await tryModel("google/gemini-3.1-flash-image", {
+    messages: [{ role: "user", content: softened }],
+    modalities: ["image", "text"],
   });
-  if (!res.ok) surfaceGatewayError(res.status, await res.text().catch(() => ""));
-  const data = (await res.json()) as { data: Array<{ b64_json?: string; url?: string }> };
-  const first = data.data?.[0];
-  if (first?.b64_json) {
-    const bin = Buffer.from(first.b64_json, "base64");
-    return new Uint8Array(bin);
-  }
-  if (first?.url) {
-    const r = await fetch(first.url);
-    return new Uint8Array(await r.arrayBuffer());
-  }
-  throw new Error("Görsel üretiminden geçerli bir sonuç dönmedi.");
+  if (r.ok) return r.bytes;
+
+  // Fallback: OpenAI with the softened prompt.
+  const r2 = await tryModel("openai/gpt-image-1-mini", { prompt: softened, quality: "low" });
+  if (r2.ok) return r2.bytes;
+
+  surfaceGatewayError(r2.status, r2.text);
 }
