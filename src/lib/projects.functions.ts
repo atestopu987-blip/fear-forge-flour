@@ -5,9 +5,24 @@ import { z } from "zod";
 const NewProjectSchema = z.object({
   baslik: z.string().trim().min(1).max(100),
   konu: z.string().trim().min(1).max(500),
-  ton: z.enum(["gerilim", "psikolojik", "sehir_efsanesi", "gore", "cocuk_korkusu"]),
+  ton: z.enum([
+    "gerilim",
+    "psikolojik",
+    "sehir_efsanesi",
+    "gore",
+    "cocuk_korkusu",
+    "eglence",
+    "plus18",
+  ]),
   hedef_sure: z.number().int().min(30).max(300),
-  gorsel_stili: z.enum(["karanlik_karikatur", "2d_animasyon", "gercekci_illustrasyon", "cizgi_film"]),
+  gorsel_stili: z.enum([
+    "karanlik_karikatur",
+    "2d_animasyon",
+    "gercekci_illustrasyon",
+    "cizgi_film",
+    "cop_adam",
+    "kagit_fonlu",
+  ]),
   format: z.enum(["9:16", "1:1", "16:9"]),
 });
 
@@ -61,6 +76,8 @@ const TON_LABEL: Record<string, string> = {
   sehir_efsanesi: "şehir efsanesi",
   gore: "karanlık ve yoğun gerilim",
   cocuk_korkusu: "çocukluk korkusu",
+  eglence: "eğlenceli, neşeli komedi",
+  plus18: "yetişkin, flörtöz, cesur mizah (18+)",
 };
 
 const STIL_LABEL: Record<string, string> = {
@@ -68,6 +85,10 @@ const STIL_LABEL: Record<string, string> = {
   "2d_animasyon": "2D animation cel-shaded horror, cinematic lighting",
   gercekci_illustrasyon: "realistic dark illustration, moody cinematic lighting",
   cizgi_film: "creepy stylized cartoon, exaggerated shadows",
+  cop_adam:
+    "hand-drawn black stick figure characters on white paper background, minimalist doodle, playful marker sketch, notebook paper texture",
+  kagit_fonlu:
+    "flat paper craft illustration, torn paper collage, beige notebook paper background, marker doodle style, playful hand-drawn",
 };
 
 type SceneOut = {
@@ -95,10 +116,16 @@ export const generateScript = createServerFn({ method: "POST" })
 
     const isAtasozu = project.konu.trim().startsWith("[ATASÖZÜ]");
     const atasozuText = isAtasozu ? project.konu.replace(/^\[ATASÖZÜ\]\s*/i, "").trim() : "";
+    const isFun = project.ton === "eglence";
+    const isPlus18 = project.ton === "plus18";
 
     const system = isAtasozu
       ? `Sen deneyimli bir Türk halk kültürü anlatıcısı ve senaristsin. Verilen atasözünün olası kökenini 4-5 sahnelik kısa, etkileyici bir hikaye şeklinde anlatırsın. Sonda atasözünün nasıl doğduğu net biçimde anlaşılmalı. Cevabın SADECE geçerli JSON olacak.`
-      : `Sen TikTok/Reels/Shorts için viral olmuş bir Türk gerilim ve gizem anlatıcısı ve senaristsin. Gen-Z izleyicisini ilk 3 saniyede yakalayan, hızlı tempolu, cliffhanger'larla ilerleyen, modern ve akıcı Türkçe hikayeler yazarsın. Kan, yara, silah, intihar, kendine zarar verme veya grafik şiddet yazmazsın; korkuyu atmosfer, gölge, ses, bilinmezlik ve psikolojik gerilimle kurarsın. İlk sahne mutlaka güçlü bir hook cümlesiyle başlar ("Bunu kimseye anlatmadım ama…", "Saat 3'te uyandığımda…" gibi). Kısa cümleler, dramatik duraklamalar, günümüz Türkçesi. Cevabın SADECE geçerli JSON olacak.`;
+      : isPlus18
+        ? `Sen TikTok/Reels için yetişkin (18+) mizah anlatıcısı ve senaristsin. Flörtöz, cesur, çift anlamlı, komik ve neşeli Türkçe hikayeler yazarsın. Cinsel organ, açık cinsel eylem, uygunsuz ilişki tanımı YAZMAZSIN; imalı, kışkırtıcı ama zarif kalırsın. Hızlı tempo, kısa cümleler, güçlü bir hook. Cevabın SADECE geçerli JSON olacak.`
+        : isFun
+          ? `Sen TikTok/Reels için viral olmuş, neşeli ve eğlenceli bir Türk anlatıcı ve komedi senaristisin. Enerjik, hızlı tempolu, sürprizli ve gülümseten, Gen-Z tonlu, modern Türkçe hikayeler yazarsın. İlk sahne güçlü bir hook cümlesiyle açılır. Cevabın SADECE geçerli JSON olacak.`
+          : `Sen TikTok/Reels/Shorts için viral olmuş bir Türk gerilim ve gizem anlatıcısı ve senaristsin. Gen-Z izleyicisini ilk 3 saniyede yakalayan, hızlı tempolu, cliffhanger'larla ilerleyen, modern ve akıcı Türkçe hikayeler yazarsın. Kan, yara, silah, intihar, kendine zarar verme veya grafik şiddet yazmazsın; korkuyu atmosfer, gölge, ses, bilinmezlik ve psikolojik gerilimle kurarsın. İlk sahne mutlaka güçlü bir hook cümlesiyle başlar ("Bunu kimseye anlatmadım ama…", "Saat 3'te uyandığımda…" gibi). Kısa cümleler, dramatik duraklamalar, günümüz Türkçesi. Cevabın SADECE geçerli JSON olacak.`;
 
     const user = isAtasozu
       ? `Atasözü: "${atasozuText}"
