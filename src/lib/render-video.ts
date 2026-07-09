@@ -48,12 +48,13 @@ type KenBurns = {
 };
 
 function kenBurnsFor(i: number): KenBurns {
-  // Alternate: zoom-in from center, pan-right, zoom-out, pan-left
+  // Bigger, more dynamic movement — feels like a live camera, not a slideshow
   const patterns: KenBurns[] = [
-    { z0: 1.02, z1: 1.15, ox0: 0, oy0: 0, ox1: 0, oy1: 0 },
-    { z0: 1.1, z1: 1.1, ox0: -0.04, oy0: 0, ox1: 0.04, oy1: 0 },
-    { z0: 1.18, z1: 1.04, ox0: 0, oy0: 0.02, ox1: 0, oy1: -0.02 },
-    { z0: 1.08, z1: 1.16, ox0: 0.03, oy0: -0.02, ox1: -0.03, oy1: 0.02 },
+    { z0: 1.05, z1: 1.28, ox0: 0, oy0: 0.02, ox1: 0, oy1: -0.02 },
+    { z0: 1.22, z1: 1.06, ox0: -0.08, oy0: 0, ox1: 0.08, oy1: 0 },
+    { z0: 1.3, z1: 1.08, ox0: 0.05, oy0: -0.04, ox1: -0.05, oy1: 0.04 },
+    { z0: 1.08, z1: 1.24, ox0: 0.06, oy0: 0.03, ox1: -0.06, oy1: -0.03 },
+    { z0: 1.15, z1: 1.32, ox0: -0.04, oy0: -0.03, ox1: 0.04, oy1: 0.03 },
   ];
   return patterns[i % patterns.length];
 }
@@ -66,10 +67,16 @@ function drawScene(
   t: number, // 0..1 progress within scene
   kb: KenBurns,
   alpha: number,
+  frame = 0,
 ) {
-  const zoom = kb.z0 + (kb.z1 - kb.z0) * t;
-  const ox = (kb.ox0 + (kb.ox1 - kb.ox0) * t) * W;
-  const oy = (kb.oy0 + (kb.oy1 - kb.oy0) * t) * H;
+  // easeInOut for smoother, more organic feel
+  const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  const zoom = kb.z0 + (kb.z1 - kb.z0) * e;
+  // Subtle handheld shake
+  const shakeX = Math.sin(frame * 0.21) * W * 0.0015;
+  const shakeY = Math.cos(frame * 0.17) * H * 0.0015;
+  const ox = (kb.ox0 + (kb.ox1 - kb.ox0) * e) * W + shakeX;
+  const oy = (kb.oy0 + (kb.oy1 - kb.oy0) * e) * H + shakeY;
   const scale = Math.max(W / img.width, H / img.height) * zoom;
   const dw = img.width * scale;
   const dh = img.height * scale;
@@ -99,6 +106,27 @@ function drawGrain(ctx: CanvasRenderingContext2D, W: number, H: number, frame: n
     const y = ((seed * 7 + i * 251) % H) | 0;
     ctx.fillRect(x, y, 1, 1);
   }
+}
+
+function drawColorGrade(ctx: CanvasRenderingContext2D, W: number, H: number) {
+  // Teal-orange cinematic tint
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "rgba(20,40,60,0.18)");
+  g.addColorStop(1, "rgba(90,40,20,0.14)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawLightLeak(ctx: CanvasRenderingContext2D, W: number, H: number, frame: number) {
+  const t = (frame % 300) / 300;
+  const x = W * (0.15 + Math.sin(t * Math.PI * 2) * 0.1);
+  const y = H * (0.2 + Math.cos(t * Math.PI * 2) * 0.05);
+  const r = Math.max(W, H) * 0.35;
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, "rgba(255,120,80,0.08)");
+  g.addColorStop(1, "rgba(255,120,80,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
 }
 
 function wrapLines(
@@ -151,12 +179,10 @@ function drawKaraokeCaption(
 
   // Karaoke: reveal words based on t
   const totalWords = words.length;
-  // Start slightly after t=0 and finish slightly before end for readability
-  const revealed = Math.min(
-    totalWords,
-    Math.max(0, Math.floor(((t - 0.05) / 0.85) * totalWords)),
-  );
-  const activeIdx = Math.min(totalWords - 1, revealed);
+  // Reveal timing per word for pop-in animation
+  const revealFloat = Math.max(0, ((t - 0.05) / 0.85) * totalWords);
+  const activeIdx = Math.min(totalWords - 1, Math.floor(revealFloat));
+  const activeFrac = Math.max(0, Math.min(1, revealFloat - Math.floor(revealFloat)));
 
   let wordIdx = 0;
   lines.forEach((lineWords, li) => {
@@ -171,17 +197,28 @@ function drawKaraokeCaption(
       const globalIdx = wordIdx++;
       const isActive = globalIdx === activeIdx;
       const isPast = globalIdx < activeIdx;
-      const color = isActive
-        ? "hsl(var(--primary))"
-        : isPast
-          ? "#ffffff"
-          : "rgba(255,255,255,0.35)";
-      // Fallback: hsl var may not resolve on canvas; use accent hex
-      ctx.fillStyle = isActive ? "#ff3b3b" : color;
-      ctx.shadowColor = "rgba(0,0,0,0.95)";
-      ctx.shadowBlur = 10;
+      const isFuture = globalIdx > activeIdx;
+      if (isFuture) {
+        x += widths[i] + spaceW;
+        continue;
+      }
+      // Pop-in scale + fade for the active word
+      const pop = isActive ? 0.6 + 0.4 * Math.min(1, activeFrac * 3) : 1;
+      const alpha = isActive ? Math.min(1, activeFrac * 4) : 1;
+      ctx.save();
+      const cx = x + widths[i] / 2;
+      const cy = y - fontSize * 0.35;
+      ctx.translate(cx, cy);
+      ctx.scale(pop, pop);
+      ctx.translate(-cx, -cy);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = isActive ? "#ffd23b" : isPast ? "#ffffff" : "rgba(255,255,255,0.35)";
+      ctx.shadowColor = isActive ? "rgba(255,180,40,0.9)" : "rgba(0,0,0,0.95)";
+      ctx.shadowBlur = isActive ? 22 : 12;
       ctx.textAlign = "left";
       ctx.fillText(w, x, y);
+      ctx.restore();
+      ctx.globalAlpha = 1;
       x += widths[i] + spaceW;
     }
   });
@@ -318,10 +355,10 @@ export async function renderAndDownload(opts: {
       const hasNext = idx + 1 < prepared.length;
       if (hasNext && remaining < crossfadeS) {
         const mix = 1 - remaining / crossfadeS; // 0..1 into next
-        drawScene(ctx, prepared[idx].img, W, H, t, prepared[idx].kb, 1 - mix);
-        drawScene(ctx, prepared[idx + 1].img, W, H, 0, prepared[idx + 1].kb, mix);
+        drawScene(ctx, prepared[idx].img, W, H, t, prepared[idx].kb, 1 - mix, frameNo);
+        drawScene(ctx, prepared[idx + 1].img, W, H, 0, prepared[idx + 1].kb, mix, frameNo);
       } else {
-        drawScene(ctx, prepared[idx].img, W, H, t, prepared[idx].kb, 1);
+        drawScene(ctx, prepared[idx].img, W, H, t, prepared[idx].kb, 1, frameNo);
       }
 
       // Fade-in first 400ms of whole video
@@ -330,6 +367,8 @@ export async function renderAndDownload(opts: {
         ctx.fillRect(0, 0, W, H);
       }
 
+      drawColorGrade(ctx, W, H);
+      drawLightLeak(ctx, W, H, frameNo);
       drawVignette(ctx, W, H);
       drawGrain(ctx, W, H, frameNo);
       drawKaraokeCaption(ctx, prepared[idx].scene.anlatim, W, H, t);

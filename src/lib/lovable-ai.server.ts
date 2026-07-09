@@ -43,10 +43,10 @@ export async function chatJson<T>(system: string, user: string, model = "google/
 
 export async function textToSpeechMp3(input: string, voice = "onyx"): Promise<Uint8Array> {
   const instructions =
-    "Sen efsanevi bir Türk anlatıcısın — Mazlum Kiper tarzında derin, sıcak, karizmatik bir erkek sesi. " +
-    "Seyirciyi ilk cümleden yakala. Dramatik duraklamalar yap, önemli kelimeleri vurgula, gizemli kısımlarda sesini alçalt, " +
-    "gerilim yükselince tempo ve şiddeti artır. Yavaş, net ve etkileyici konuş; kelimelerin arasında nefes ve tonlama olsun. " +
-    "Bir korku hikayesi anlatıcısı gibi — samimi, hipnotik, sinematik.";
+    "Sen genç, karizmatik ve viral bir Türk anlatıcısın — TikTok/Reels izleyicisini ilk 3 saniyede yakalayan, " +
+    "derin ve sıcak erkek sesi. Enerjini yüksek tut ama dramı kaybetme: hook cümlesinde tempoyu artır, gizemli " +
+    "kısımlarda fısılda, doruk noktalarında sesini büyüt. Kelimeleri net vurgula, önemli kelimelerden önce kısa " +
+    "duraklamalar bırak, sonlarda cliffhanger tonu ver. Modern, sinematik, hipnotik — asla robotik ya da düz okuyucu değil.";
   const res = await fetch(`${BASE}/audio/speech`, {
     method: "POST",
     headers: {
@@ -58,7 +58,7 @@ export async function textToSpeechMp3(input: string, voice = "onyx"): Promise<Ui
       input,
       voice,
       instructions,
-      speed: 0.95,
+      speed: 1.02,
       response_format: "mp3",
     }),
   });
