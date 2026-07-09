@@ -152,8 +152,24 @@ function ProjectPage() {
   if (isLoading || !data) {
     return <div className="text-sm text-muted-foreground">Yükleniyor…</div>;
   }
+  if (!data.project) {
+    return (
+      <div className="rounded-lg border border-border bg-card p-6 text-sm">
+        <p className="font-serif text-lg">Proje bulunamadı</p>
+        <p className="mt-2 text-muted-foreground">
+          Bu proje silinmiş ya da başka bir hesaba ait olabilir.
+        </p>
+        <Link
+          to="/dashboard"
+          className="mt-4 inline-block rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
+        >
+          Panele dön
+        </Link>
+      </div>
+    );
+  }
 
-  const { project, scenes } = data;
+  const { project, scenes } = data as { project: NonNullable<typeof data.project>; scenes: typeof data.scenes };
   const allImages = scenes.length > 0 && scenes.every((s) => s.gorsel_url);
   const allVoices = scenes.length > 0 && scenes.every((s) => s.ses_url);
   const projSlug = slug(project.baslik);
