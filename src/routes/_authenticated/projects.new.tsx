@@ -16,13 +16,22 @@ function NewProject() {
   const [form, setForm] = useState({
     baslik: "",
     konu: "",
-    ton: "gerilim" as "gerilim" | "psikolojik" | "sehir_efsanesi" | "gore" | "cocuk_korkusu",
+    ton: "gerilim" as
+      | "gerilim"
+      | "psikolojik"
+      | "sehir_efsanesi"
+      | "gore"
+      | "cocuk_korkusu"
+      | "eglence"
+      | "plus18",
     hedef_sure: 60,
     gorsel_stili: "karanlik_karikatur" as
       | "karanlik_karikatur"
       | "2d_animasyon"
       | "gercekci_illustrasyon"
-      | "cizgi_film",
+      | "cizgi_film"
+      | "cop_adam"
+      | "kagit_fonlu",
     format: "9:16" as "9:16" | "1:1" | "16:9",
   });
 
@@ -117,6 +126,8 @@ function NewProject() {
               <option value="sehir_efsanesi">Şehir Efsanesi</option>
               <option value="gore">Gore / Kanlı</option>
               <option value="cocuk_korkusu">Çocukluk Korkusu</option>
+              <option value="eglence">Eğlence / Komedi 😄</option>
+              <option value="plus18">+18 Flörtöz Mizah 🔥</option>
             </select>
           </div>
           <div>
@@ -145,6 +156,8 @@ function NewProject() {
               <option value="2d_animasyon">2D Animasyon</option>
               <option value="gercekci_illustrasyon">Gerçekçi İllüstrasyon</option>
               <option value="cizgi_film">Ürkütücü Çizgi Film</option>
+              <option value="cop_adam">Çöp Adam (Kağıt Fon) ✏️</option>
+              <option value="kagit_fonlu">Kağıt Fonlu Doodle 📝</option>
             </select>
           </div>
           <div>
