@@ -127,12 +127,40 @@ export async function chatJson<T>(system: string, user: string, model = "google/
   }
 }
 
-export async function textToSpeechMp3(input: string, voice = "onyx"): Promise<Uint8Array> {
-  const instructions =
-    "Sen genç, karizmatik ve viral bir Türk anlatıcısın — TikTok/Reels izleyicisini ilk 3 saniyede yakalayan, " +
-    "derin ve sıcak erkek sesi. Enerjini yüksek tut ama dramı kaybetme: hook cümlesinde tempoyu artır, gizemli " +
-    "kısımlarda fısılda, doruk noktalarında sesini büyüt. Kelimeleri net vurgula, önemli kelimelerden önce kısa " +
-    "duraklamalar bırak, sonlarda cliffhanger tonu ver. Modern, sinematik, hipnotik — asla robotik ya da düz okuyucu değil.";
+type TtsOptions = { mood?: string; voice?: string };
+
+const HORROR_INSTR =
+  "Sen genç, karizmatik ve viral bir Türk anlatıcısın — TikTok/Reels izleyicisini ilk 3 saniyede yakalayan, " +
+  "derin ve sıcak erkek sesi. Enerjini yüksek tut ama dramı kaybetme: hook cümlesinde tempoyu artır, gizemli " +
+  "kısımlarda fısılda, doruk noktalarında sesini büyüt. Kelimeleri net vurgula, önemli kelimelerden önce kısa " +
+  "duraklamalar bırak, sonlarda cliffhanger tonu ver. Modern, sinematik, hipnotik — asla robotik ya da düz okuyucu değil.";
+
+const FUN_INSTR =
+  "Sen neşeli, enerjik ve komik bir genç Türk TikTok anlatıcısısın. İnce, parlak ve tempolu bir sesle konuş; " +
+  "gülümseten vurgular, sürpriz tonlamalar, hızlı ritim. Her cümlenin sonuna hafif komik bir tını bırak, " +
+  "önemli kelimelerde sesini yükselt, aralarda mini kahkaha imaları hisset. Akıcı, hızlı ve eğlenceli — asla düz okuyucu değil.";
+
+const PLUS18_INSTR =
+  "Sen fısıltılı, flörtöz ve cesur bir yetişkin Türk anlatıcısın. Sıcak, biraz alaycı, çift anlamlı vurgularla; " +
+  "hızlı tempo, kısa duraklamalar, gülümseyen bir ton. Zarif kal, uygunsuz olma — ama imalar hissedilsin. " +
+  "Modern, çekici, seyirciyi çeken bir kadın-erkek arası nötr, oyunbaz enerji.";
+
+function moodToVoiceProfile(mood?: string) {
+  switch (mood) {
+    case "eglence":
+      return { voice: "nova", speed: 1.15, instructions: FUN_INSTR };
+    case "plus18":
+      return { voice: "sage", speed: 1.1, instructions: PLUS18_INSTR };
+    default:
+      return { voice: "onyx", speed: 1.02, instructions: HORROR_INSTR };
+  }
+}
+
+export async function textToSpeechMp3(input: string, opts: TtsOptions = {}): Promise<Uint8Array> {
+  const profile = moodToVoiceProfile(opts.mood);
+  const voice = opts.voice ?? profile.voice;
+  const instructions = profile.instructions;
+  const speed = profile.speed;
   const res = await fetch(`${BASE}/audio/speech`, {
     method: "POST",
     headers: {
@@ -144,7 +172,7 @@ export async function textToSpeechMp3(input: string, voice = "onyx"): Promise<Ui
       input,
       voice,
       instructions,
-      speed: 1.02,
+      speed,
       response_format: "mp3",
     }),
   });
