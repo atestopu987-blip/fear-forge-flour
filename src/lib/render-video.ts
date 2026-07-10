@@ -417,6 +417,7 @@ export async function renderAndDownload(opts: {
 async function saveVideoBlob(blob: Blob, filename: string, mime: string) {
   const ua = navigator.userAgent;
   const isIOS = /iPad|iPhone|iPod/.test(ua) && !("MSStream" in window);
+  const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
   const isMobile = isIOS || /Android/i.test(ua);
 
   // 1) Try Web Share API with file (best UX on iOS/Android — user can save to Files/Photos)
@@ -426,7 +427,7 @@ async function saveVideoBlob(blob: Blob, filename: string, mime: string) {
       canShare?: (data: { files?: File[] }) => boolean;
       share?: (data: { files?: File[]; title?: string }) => Promise<void>;
     };
-    if (isMobile && navAny.canShare && navAny.share && navAny.canShare({ files: [file] })) {
+    if ((isMobile || isSafari) && navAny.canShare && navAny.share && navAny.canShare({ files: [file] })) {
       await navAny.share({ files: [file], title: filename });
       return;
     }
@@ -434,24 +435,42 @@ async function saveVideoBlob(blob: Blob, filename: string, mime: string) {
     // fall through
   }
 
-  // 2) Standard blob download
+  // 2) iOS Safari: `download` attribute is ignored. Convert to a data URL and
+  // open in a new tab so the user can long-press → "Video'yu Kaydet".
+  if (isIOS || isSafari) {
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+      const win = window.open();
+      if (win) {
+        win.document.write(
+          `<html><head><title>${filename}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:#000;color:#fff;font-family:-apple-system,system-ui;text-align:center}video{width:100%;max-height:80vh}p{padding:12px;font-size:14px;line-height:1.4}</style></head><body><video src="${dataUrl}" controls autoplay playsinline></video><p>Videoya uzun basıp <b>“Videoyu Kaydet”</b> seçin.<br/>Ya da paylaş simgesiyle Fotoğraflar'a ekleyin.</p></body></html>`,
+        );
+        win.document.close();
+        return;
+      }
+      // Popup blocked — navigate current tab.
+      window.location.href = dataUrl;
+      return;
+    } catch {
+      // fall through to standard blob download
+    }
+  }
+
+  // 3) Standard blob download (Chrome/Firefox/Edge desktop + Android Chrome)
   const url = URL.createObjectURL(blob);
   try {
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
     a.rel = "noopener";
-    a.target = "_blank";
     document.body.appendChild(a);
     a.click();
     a.remove();
-
-    // 3) iOS Safari fallback: navigate to blob so the user can long-press → Save
-    if (isIOS) {
-      setTimeout(() => {
-        window.location.href = url;
-      }, 200);
-    }
   } finally {
     setTimeout(() => URL.revokeObjectURL(url), 15_000);
   }
