@@ -113,11 +113,13 @@ function ProjectPage() {
       if (list.length === 0) throw new Error("Senaryo üretilemedi.");
       const total = list.length;
       let doneCount = 0;
+      let skippedVoices = 0;
       setAutoMsg(`0/${total * 2} varlık hazır…`);
       await Promise.all(
         list.flatMap((s) => [
           (async () => {
-            await genVoice({ data: { scene_id: s.id } });
+            const voiceRes = await genVoice({ data: { scene_id: s.id } });
+            if (voiceRes.skipped) skippedVoices++;
             doneCount++;
             setAutoMsg(`${doneCount}/${total * 2} varlık hazır…`);
           })(),
@@ -129,6 +131,9 @@ function ProjectPage() {
         ]),
       );
       await refetch();
+      if (skippedVoices > 0) {
+        toast.warning(`${skippedVoices} sahnede AI kredisi/limit nedeniyle ses atlandı; video görsellerle indirilebilir.`);
+      }
       toast.success(`Tamam. ${scriptRes.count} sahne hazır.`);
     } catch (err) {
       toast.error((err as Error).message);
