@@ -149,10 +149,11 @@ export async function chatJson<T>(system: string, user: string, model = "google/
 type TtsOptions = { mood?: string; voice?: string };
 
 const HORROR_INSTR =
-  "Sen genç, karizmatik ve viral bir Türk anlatıcısın — TikTok/Reels izleyicisini ilk 3 saniyede yakalayan, " +
-  "derin ve sıcak erkek sesi. Enerjini yüksek tut ama dramı kaybetme: hook cümlesinde tempoyu artır, gizemli " +
-  "kısımlarda fısılda, doruk noktalarında sesini büyüt. Kelimeleri net vurgula, önemli kelimelerden önce kısa " +
-  "duraklamalar bırak, sonlarda cliffhanger tonu ver. Modern, sinematik, hipnotik — asla robotik ya da düz okuyucu değil.";
+  "Sen çok kalın, derinden gelen bas tonlu, karizmatik bir Türk anlatıcısın — göğüsten konuşan, ağır ve tok bir erkek sesi. " +
+  "Ton rezonansı bir sinema seslendirmeni gibi kalın ve dolgun olsun; frekans olarak derin ve ağır konuş. " +
+  "TikTok/Reels izleyicisini ilk 3 saniyede yakala; hook cümlesinde tempoyu artır, gizemli kısımlarda kalın bir fısıltıya düş, " +
+  "doruk noktalarında sesini büyüt. Kelimeleri net vurgula, önemli kelimelerden önce kısa duraklamalar bırak, " +
+  "sonlarda cliffhanger tonu ver. Kalın, sinematik, hipnotik — asla ince, tiz ya da düz okuyucu değil.";
 
 const FUN_INSTR =
   "Sen neşeli, enerjik ve komik bir genç Türk TikTok anlatıcısısın. İnce, parlak ve tempolu bir sesle konuş; " +
@@ -171,7 +172,7 @@ function moodToVoiceProfile(mood?: string) {
     case "plus18":
       return { voice: "sage", speed: 1.1, instructions: PLUS18_INSTR };
     default:
-      return { voice: "onyx", speed: 1.02, instructions: HORROR_INSTR };
+      return { voice: "onyx", speed: 0.94, instructions: HORROR_INSTR };
   }
 }
 
@@ -205,10 +206,9 @@ export async function generateImagePng(prompt: string): Promise<Uint8Array> {
   // intentionally avoided here because horror story prompts are often rejected
   // as violence/self-harm even after softening.
   const cleaned = sanitizeImagePrompt(prompt);
-  const safePrompts = [
-    `Cinematic atmospheric illustration for a Turkish mystery short film. ${cleaned}. Focus on fog, moonlight, expressive shadows, old architecture, dramatic composition, rich texture, teal-orange cinematic color grade, vertical social-video framing.`,
-    `Family-safe eerie mystery illustration, empty foggy village road, old wooden house silhouette, moonlight through trees, long shadows, cinematic lighting, high detail, vertical composition.`,
-  ];
+  const primary = `${cleaned}. High quality cinematic illustration, atmospheric mood, dramatic lighting, rich detail, coherent composition, vertical 9:16 social video framing, family-safe, no text, no watermark, no graphic violence.`;
+  const backup = `Cinematic atmospheric illustration for a Turkish short film. ${cleaned}. Fog, moonlight, expressive shadows, dramatic composition, rich texture, teal-orange cinematic color grade, vertical framing, no text.`;
+  const safePrompts = [primary, backup];
 
   const tryModel = async (model: string, body: Record<string, unknown>) => {
     const res = await fetch(`${BASE}/images/generations`, {
@@ -231,8 +231,9 @@ export async function generateImagePng(prompt: string): Promise<Uint8Array> {
   };
 
   const failures: Array<{ ok: false; status: number; text: string }> = [];
+  // Try flash first (faster, more permissive), then pro, then legacy.
   for (const safePrompt of safePrompts) {
-    for (const model of ["google/gemini-3-pro-image", "google/gemini-3.1-flash-image", "google/gemini-2.5-flash-image"]) {
+    for (const model of ["google/gemini-3.1-flash-image", "google/gemini-3-pro-image", "google/gemini-2.5-flash-image"]) {
       const r = await tryModel(model, {
         messages: [{ role: "user", content: safePrompt }],
         modalities: ["image", "text"],
