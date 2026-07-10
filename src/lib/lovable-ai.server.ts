@@ -206,10 +206,9 @@ export async function generateImagePng(prompt: string): Promise<Uint8Array> {
   // intentionally avoided here because horror story prompts are often rejected
   // as violence/self-harm even after softening.
   const cleaned = sanitizeImagePrompt(prompt);
-  const safePrompts = [
-    `Cinematic atmospheric illustration for a Turkish mystery short film. ${cleaned}. Focus on fog, moonlight, expressive shadows, old architecture, dramatic composition, rich texture, teal-orange cinematic color grade, vertical social-video framing.`,
-    `Family-safe eerie mystery illustration, empty foggy village road, old wooden house silhouette, moonlight through trees, long shadows, cinematic lighting, high detail, vertical composition.`,
-  ];
+  const primary = `${cleaned}. High quality cinematic illustration, atmospheric mood, dramatic lighting, rich detail, coherent composition, vertical 9:16 social video framing, family-safe, no text, no watermark, no graphic violence.`;
+  const backup = `Cinematic atmospheric illustration for a Turkish short film. ${cleaned}. Fog, moonlight, expressive shadows, dramatic composition, rich texture, teal-orange cinematic color grade, vertical framing, no text.`;
+  const safePrompts = [primary, backup];
 
   const tryModel = async (model: string, body: Record<string, unknown>) => {
     const res = await fetch(`${BASE}/images/generations`, {
@@ -232,8 +231,9 @@ export async function generateImagePng(prompt: string): Promise<Uint8Array> {
   };
 
   const failures: Array<{ ok: false; status: number; text: string }> = [];
+  // Try flash first (faster, more permissive), then pro, then legacy.
   for (const safePrompt of safePrompts) {
-    for (const model of ["google/gemini-3-pro-image", "google/gemini-3.1-flash-image", "google/gemini-2.5-flash-image"]) {
+    for (const model of ["google/gemini-3.1-flash-image", "google/gemini-3-pro-image", "google/gemini-2.5-flash-image"]) {
       const r = await tryModel(model, {
         messages: [{ role: "user", content: safePrompt }],
         modalities: ["image", "text"],
