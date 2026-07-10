@@ -262,8 +262,8 @@ export async function renderAndDownload(opts: {
   title: string;
   onProgress?: (msg: string) => void;
 }): Promise<void> {
-  const scenes = opts.scenes.filter((s) => s.gorsel_url && s.ses_url);
-  if (scenes.length === 0) throw new Error("Her sahnenin sesi ve görseli hazır olmalı.");
+  const scenes = opts.scenes.filter((s) => s.gorsel_url);
+  if (scenes.length === 0) throw new Error("Video için en az bir sahnenin görseli hazır olmalı.");
   const { w: W, h: H } = dims(opts.format);
 
   opts.onProgress?.("Varlıklar hazırlanıyor…");
@@ -279,7 +279,7 @@ export async function renderAndDownload(opts: {
     scenes.map(async (s, i) => ({
       scene: s,
       img: await loadImage(s.gorsel_url!),
-      audio: await fetchAudioBuffer(audioCtx, s.ses_url!),
+      audio: s.ses_url ? await fetchAudioBuffer(audioCtx, s.ses_url).catch(() => null) : null,
       kb: kenBurnsFor(i),
     })),
   );
@@ -318,13 +318,17 @@ export async function renderAndDownload(opts: {
   const sceneStarts: number[] = []; // in seconds since startAt
   const sceneDurations: number[] = [];
   for (const p of prepared) {
-    const src = audioCtx.createBufferSource();
-    src.buffer = p.audio;
-    src.connect(dest);
-    src.start(cursor);
+    const estimatedDuration = Math.max(4, Math.min(12, p.scene.anlatim.trim().split(/\s+/).length / 2.6));
+    const duration = p.audio?.duration ?? estimatedDuration;
+    if (p.audio) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = p.audio;
+      src.connect(dest);
+      src.start(cursor);
+    }
     sceneStarts.push(cursor - startAt);
-    sceneDurations.push(p.audio.duration);
-    cursor += p.audio.duration;
+    sceneDurations.push(duration);
+    cursor += duration;
   }
   const totalDur = cursor - startAt;
 

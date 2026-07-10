@@ -102,7 +102,7 @@ export const generateScript = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ project_id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { chatJson } = await import("./lovable-ai.server");
+    const { chatJson, isAiBillingOrLimitError } = await import("./lovable-ai.server");
     const { data: project, error } = await context.supabase
       .from("projects")
       .select("*")
@@ -153,7 +153,16 @@ Hikayeyi 6-10 sahneye böl. Her sahne için:
 SADECE şu JSON formatını döndür:
 {"sahneler":[{"sira":1,"anlatim":"...","gorsel_prompt":"...","ses_efekti":"..."}]}`;
 
-    const out = await chatJson<{ sahneler: SceneOut[] }>(system, user);
+    let usedFallback = false;
+    let out: { sahneler: SceneOut[] };
+    try {
+      out = await chatJson<{ sahneler: SceneOut[] }>(system, user);
+    } catch (err) {
+      if (!isAiBillingOrLimitError(err)) throw err;
+      const { buildFallbackScript } = await import("./project-fallbacks.server");
+      out = buildFallbackScript(project);
+      usedFallback = true;
+    }
     const sahneler = out.sahneler ?? [];
     if (sahneler.length === 0) throw new Error("Senaryo üretilemedi");
 
@@ -175,7 +184,13 @@ SADECE şu JSON formatını döndür:
       .update({ durum: "senaryo_hazir" })
       .eq("id", data.project_id);
 
-    return { count: rows.length };
+    return {
+      count: rows.length,
+      fallback: usedFallback,
+      message: usedFallback
+        ? "AI kredisi/limit nedeniyle yerel yedek senaryo üretildi. AI kalitesinde üretim için kredi ekleyin."
+        : null,
+    };
   });
 
 export const updateScene = createServerFn({ method: "POST" })
@@ -220,7 +235,7 @@ export const generateVoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ scene_id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { textToSpeechMp3 } = await import("./lovable-ai.server");
+    const { textToSpeechMp3, isAiBillingOrLimitError } = await import("./lovable-ai.server");
     const { data: scene, error } = await context.supabase
       .from("scenes")
       .select("id, project_id, sira, anlatim")
@@ -232,7 +247,17 @@ export const generateVoice = createServerFn({ method: "POST" })
       .select("ton")
       .eq("id", scene.project_id)
       .maybeSingle();
-    const bytes = await textToSpeechMp3(scene.anlatim, { mood: proj?.ton ?? "gerilim" });
+    let bytes: Uint8Array;
+    try {
+      bytes = await textToSpeechMp3(scene.anlatim, { mood: proj?.ton ?? "gerilim" });
+    } catch (err) {
+      if (!isAiBillingOrLimitError(err)) throw err;
+      return {
+        url: null,
+        skipped: true,
+        message: "AI kredisi/limit nedeniyle ses üretilemedi. Görselsiz/sessiz video indirebilir veya kredi ekleyip sesi tekrar üretebilirsiniz.",
+      };
+    }
     const url = await uploadAsset(
       { supabase: context.supabase, userId: context.userId },
       `${scene.project_id}/scene-${scene.sira}-${Date.now()}.mp3`,
@@ -244,7 +269,7 @@ export const generateVoice = createServerFn({ method: "POST" })
       .update({ ses_url: url })
       .eq("id", scene.id);
     if (ue) throw new Error(ue.message);
-    return { url };
+    return { url, skipped: false, message: null };
   });
 
 export const generateImage = createServerFn({ method: "POST" })
@@ -354,7 +379,7 @@ export const generateDirectorGuide = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ project_id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { chatJson } = await import("./lovable-ai.server");
+    const { chatJson, isAiBillingOrLimitError } = await import("./lovable-ai.server");
     const { data: project, error } = await context.supabase
       .from("projects")
       .select("*")
@@ -394,6 +419,16 @@ Her sahne için TÜRKÇE, kısa ve pratik CapCut talimatları üret. SADECE şu 
 "yazi_animasyonu":"typewriter","fade_sn":"in 0.3 / out 0.3"
 }]}`;
 
-    const out = await chatJson<{ sahneler: DirectorScene[] }>(system, user);
-    return { scenes: out.sahneler ?? [] };
+    try {
+      const out = await chatJson<{ sahneler: DirectorScene[] }>(system, user);
+      return { scenes: out.sahneler ?? [], fallback: false, message: null };
+    } catch (err) {
+      if (!isAiBillingOrLimitError(err)) throw err;
+      const { buildFallbackDirectorGuide } = await import("./project-fallbacks.server");
+      return {
+        scenes: buildFallbackDirectorGuide(project, scenes) as DirectorScene[],
+        fallback: true,
+        message: "AI kredisi/limit nedeniyle yerel CapCut rehberi oluşturuldu.",
+      };
+    }
   });
