@@ -9,10 +9,29 @@ function key() {
   return k;
 }
 
+export class AiGatewayError extends Error {
+  status: number;
+
+  constructor(status: number, body: string) {
+    const message = status === 429
+      ? "AI kullanım limitine ulaşıldı, birazdan tekrar deneyin."
+      : status === 402
+        ? "AI kredisi bitti. Yerel yedek üretim kullanılıyor; AI ses/görsel için çalışma alanınıza kredi ekleyin."
+        : `AI gateway ${status}: ${body.slice(0, 400)}`;
+    super(message);
+    this.name = "AiGatewayError";
+    this.status = status;
+  }
+}
+
+export function isAiBillingOrLimitError(error: unknown) {
+  if (error instanceof AiGatewayError) return error.status === 402 || error.status === 429;
+  if (!(error instanceof Error)) return false;
+  return /AI kredisi bitti|AI kullanım limitine ulaşıldı|\b402\b|\b429\b/i.test(error.message);
+}
+
 function surfaceGatewayError(status: number, body: string): never {
-  if (status === 429) throw new Error("AI kullanım limitine ulaşıldı, birazdan tekrar deneyin.");
-  if (status === 402) throw new Error("AI kredisi bitti. Lütfen çalışma alanınıza kredi ekleyin.");
-  throw new Error(`AI gateway ${status}: ${body.slice(0, 400)}`);
+  throw new AiGatewayError(status, body);
 }
 
 function hasBillingOrLimitError(result: { ok: false; status: number; text: string }) {
@@ -220,7 +239,7 @@ export async function generateImagePng(prompt: string): Promise<Uint8Array> {
       });
       if (r.ok) return r.bytes;
       failures.push(r);
-      if (hasBillingOrLimitError(r)) surfaceGatewayError(r.status, r.text);
+      if (hasBillingOrLimitError(r)) return createAtmosphericFallbackPng(cleaned || prompt);
     }
   }
 

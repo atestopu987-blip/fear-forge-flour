@@ -107,6 +107,7 @@ function ProjectPage() {
     try {
       setAutoMsg("Senaryo yazılıyor…");
       const scriptRes = await genScript({ data: { project_id: project.id } });
+      if (scriptRes.fallback && scriptRes.message) toast.warning(scriptRes.message);
       const fresh = await refetch();
       const list = fresh.data?.scenes ?? [];
       if (list.length === 0) throw new Error("Senaryo üretilemedi.");
@@ -199,8 +200,9 @@ function ProjectPage() {
             disabled={busy !== null}
             onClick={() =>
               run("script", async () => {
-                await genScript({ data: { project_id: project.id } });
-                toast.success("Senaryo hazır.");
+                const res = await genScript({ data: { project_id: project.id } });
+                if (res.fallback && res.message) toast.warning(res.message);
+                else toast.success("Senaryo hazır.");
               })
             }
             className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
@@ -312,7 +314,8 @@ function ProjectPage() {
                 run("director", async () => {
                   const res = await genDirector({ data: { project_id: project.id } });
                   setDirector(res.scenes);
-                  toast.success("CapCut rehberi hazır.");
+                  if (res.fallback && res.message) toast.warning(res.message);
+                  else toast.success("CapCut rehberi hazır.");
                 })
               }
             >
@@ -419,8 +422,9 @@ function ProjectPage() {
             busy={busy}
             onVoice={() =>
               run(`voice-${s.id}`, async () => {
-                await genVoice({ data: { scene_id: s.id } });
-                toast.success(`Sahne ${s.sira} sesi hazır.`);
+                const res = await genVoice({ data: { scene_id: s.id } });
+                if (res.skipped && res.message) toast.warning(res.message);
+                else toast.success(`Sahne ${s.sira} sesi hazır.`);
               })
             }
             onImage={() =>
